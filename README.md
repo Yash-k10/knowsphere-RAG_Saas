@@ -1,6 +1,7 @@
 # KnowSphere — Multi-Tenant RAG Knowledge Assistant
 > *Your organization's private knowledge, intelligently searchable.*
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Render-46E3B7.svg?style=for-the-badge&logo=render&logoColor=white)](https://knowsphere-web.onrender.com)
 [![Python](https://img.shields.io/badge/Python-3.12-blue.svg)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev)
@@ -8,6 +9,9 @@
 [![TailwindCSS](https://img.shields.io/badge/TailwindCSS-Sage%20%26%20Earth-38B2AC.svg)](https://tailwindcss.com)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17%20%2B%20pgvector-336791.svg)](https://www.postgresql.org)
 [![Security](https://img.shields.io/badge/Multi--Tenancy-Strict%20Data%20Isolation-success.svg)](#multi-tenant-architecture)
+
+> 🚀 **Live Production Application:** **[https://knowsphere-web.onrender.com](https://knowsphere-web.onrender.com)**  
+> *Experience enterprise-grade Multi-Tenant RAG live on Render: register your organization workspace, upload internal documents, and run semantic queries with verified citations.*
 
 **KnowSphere** is an enterprise-grade Software-as-a-Service (SaaS) AI knowledge assistant demonstrating a production-level **Retrieval-Augmented Generation (RAG)** pipeline with **cryptographic and relational multi-tenant isolation**, private on-premise vector embeddings, and an abstract, modular LLM generation layer.
 
@@ -30,8 +34,9 @@ Designed specifically as a flagship **B.Tech CSE (AIML) capstone and portfolio p
 12. [LLM Provider Layer (Google Gemini & Local LLM Transition)](#-llm-provider-layer)
 13. [API Documentation](#-api-documentation)
 14. [Automated Verification & Testing](#-automated-verification--testing)
-15. [Security & Privacy Guarantees](#-security--privacy-guarantees)
-16. [Future Roadmap](#-future-roadmap)
+15. [Live Deployment & Cloud Hosting](#-live-deployment--cloud-hosting)
+16. [Security & Privacy Guarantees](#-security--privacy-guarantees)
+17. [Future Roadmap](#-future-roadmap)
 
 ---
 
@@ -416,6 +421,22 @@ This automated verification script executes:
 3. **Security Check 1:** Tenant A attempts to access Tenant B's document ID $\rightarrow$ **Strictly rejected with 404**.
 4. **RAG Search Check:** Tenant A asks for leave entitlement $\rightarrow$ **Retrieves ABC policy with source citation**.
 5. **Security Check 2:** Tenant A asks for executive bonus information $\rightarrow$ **Tenant B chunks are NOT retrieved; safe fallback triggered!**
+
+---
+
+## 🚀 Live Deployment & Cloud Hosting
+
+KnowSphere is deployed live on **Render Cloud Infrastructure**:
+
+- 🌐 **Web Application (React + Vite):** [https://knowsphere-web.onrender.com](https://knowsphere-web.onrender.com)
+- ⚡ **Backend API & Swagger Docs:** [https://knowsphere-api.onrender.com/docs](https://knowsphere-api.onrender.com/docs)
+- 🩺 **Backend Health Endpoint:** [https://knowsphere-api.onrender.com/health](https://knowsphere-api.onrender.com/health)
+
+### Deployment Architecture
+- **Static Frontend:** Hosted on Render's global Edge CDN with SPA client-side routing rewrites (`/*` $\rightarrow$ `/index.html`).
+- **Containerized Backend:** FastAPI web service running asynchronously with automatic connection pooling (`asyncpg` & `psycopg2`).
+- **Cloud Vector Database:** Managed PostgreSQL 16 instance with native `pgvector` vector extension enabled for cosine similarity indexing.
+- **Infrastructure-as-Code:** 1-click automated provisioning managed via [`render.yaml`](render.yaml).
 
 ---
 
