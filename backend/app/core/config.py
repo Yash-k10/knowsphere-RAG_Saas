@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
 
     # Database
+    DATABASE_URL: str | None = None
     POSTGRES_SERVER: str = "127.0.0.1"
     POSTGRES_PORT: int = 5432
     POSTGRES_USER: str = "postgres"
@@ -24,10 +25,28 @@ class Settings(BaseSettings):
 
     @property
     def DATABASE_URL_ASYNC(self) -> str:
+        if self.DATABASE_URL:
+            url = self.DATABASE_URL
+            if url.startswith("postgres://"):
+                return url.replace("postgres://", "postgresql+asyncpg://", 1)
+            elif url.startswith("postgresql://"):
+                return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            elif not url.startswith("postgresql+asyncpg://"):
+                return url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
+            return url
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
     @property
     def DATABASE_URL_SYNC(self) -> str:
+        if self.DATABASE_URL:
+            url = self.DATABASE_URL
+            if url.startswith("postgres://"):
+                return url.replace("postgres://", "postgresql+psycopg2://", 1)
+            elif url.startswith("postgresql://"):
+                return url.replace("postgresql://", "postgresql+psycopg2://", 1)
+            elif not url.startswith("postgresql+psycopg2://"):
+                return url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
+            return url
         return f"postgresql+psycopg2://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
     # Storage

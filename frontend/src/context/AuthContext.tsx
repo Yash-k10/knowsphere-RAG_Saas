@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, Workspace } from '../types';
-import { authApi } from '../services/api';
+import { authApi, tenantApi } from '../services/api';
 
 interface AuthContextType {
   user: User | null;
@@ -111,6 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         login,
         register,
+        joinWorkspace,
         logout,
         switchWorkspace,
         refreshUser: fetchUserData,

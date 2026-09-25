@@ -1,0 +1,63 @@
+# Render Blueprint Specification for KnowSphere Multi-Tenant RAG SaaS
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  # -------------------------------------------------------------
+  # 1. FastAPI Backend Web Service
+  # -------------------------------------------------------------
+  - type: web
+    name: knowsphere-api
+    runtime: python
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: knowsphere-db
+          property: connectionString
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: LLM_PROVIDER
+        value: cloud
+      - key: GEMINI_MODEL
+        value: gemini-2.0-flash
+      - key: GEMINI_API_KEY
+        sync: false
+
+  # -------------------------------------------------------------
+  # 2. React + Vite Frontend (Free Static Site)
+  # -------------------------------------------------------------
+  - type: web
+    name: knowsphere-web
+    runtime: static
+    region: oregon
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        value: https://knowsphere-api.onrender.com/api
+
+# ---------------------------------------------------------------
+# 3. PostgreSQL Database with Native pgvector Support
+# ---------------------------------------------------------------
+databases:
+  - name: knowsphere-db
+    databaseName: knowsphere
+    user: knowsphere
+    region: oregon
+    plan: free
+    postgresMajorVersion: 16
