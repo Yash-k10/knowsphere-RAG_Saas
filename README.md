@@ -258,3 +258,186 @@ cd backend
 uv venv .venv --python 3.12
 # Activate virtual environment:
 # Windows PowerShell:
+.venv\Scripts\Activate.ps1
+# Linux/macOS:
+source .venv/bin/activate
+
+# Install dependencies
+uv pip install -r requirements.txt
+```
+
+### 3. Frontend Setup
+```bash
+cd ../frontend
+npm install
+```
+
+---
+
+## ⚙️ Configuration & Environment Variables
+
+Copy the `.env.example` file to `backend/.env`:
+
+```env
+# Application
+PROJECT_NAME="KnowSphere"
+ENVIRONMENT="development"
+DEBUG=True
+API_V1_STR="/api"
+
+# Security
+SECRET_KEY="knowsphere-super-secure-production-grade-key-2026-btech-rag"
+ALGORITHM="HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES=1440
+
+# Database (PostgreSQL)
+POSTGRES_SERVER="127.0.0.1"
+POSTGRES_PORT=5432
+POSTGRES_USER="postgres"
+POSTGRES_PASSWORD="postgres_password"
+POSTGRES_DB="knowsphere"
+
+# LLM Provider Configuration (Google Gemini)
+LLM_PROVIDER="cloud"
+GEMINI_API_KEY="your-google-gemini-api-key-here"
+GEMINI_MODEL="gemini-1.5-flash"
+
+# Embeddings & RAG Settings
+EMBEDDING_MODEL_NAME="sentence-transformers/all-MiniLM-L6-v2"
+EMBEDDING_DIM=384
+CHUNK_SIZE=500
+CHUNK_OVERLAP=100
+SIMILARITY_THRESHOLD=0.60
+TOP_K_CHUNKS=4
+```
+
+> **Note on Google Gemini API Key:** You can generate a free Gemini API key from [Google AI Studio](https://aistudio.google.com/). Add it to `GEMINI_API_KEY` in `backend/.env`. If omitted, KnowSphere will still perform complete document chunking, embedding, vector retrieval, and display retrieved context excerpts!
+
+---
+
+## 🏃 Running the Application
+
+### Start the Backend
+From the `backend` folder with the virtual environment activated:
+```bash
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+API Documentation and Swagger UI will be live at: **http://127.0.0.1:8000/docs**
+
+### Start the Frontend
+From the `frontend` folder:
+```bash
+npm run dev
+```
+The KnowSphere web application will be accessible at: **http://127.0.0.1:5173**
+
+---
+
+## 🐘 PostgreSQL & pgvector Configuration
+
+KnowSphere supports both native PostgreSQL `pgvector` HNSW indexing and resilient fallback execution.
+
+### Enabling Native pgvector on Windows:
+A one-click administrator script is provided in the repository:
+1. Locate `install_pgvector.bat` in the project root.
+2. Right-click and choose **"Run as administrator"**.
+3. The script places `vector.dll` into `C:\Program Files\PostgreSQL\17\lib` and enables the extension in `knowsphere`.
+
+---
+
+## 🔄 LLM Provider Layer
+
+The RAG pipeline is intentionally decoupled from specific cloud vendors through an abstract base class:
+
+```python
+class LLMProvider(ABC):
+    @abstractmethod
+    async def generate_answer(self, prompt: str, system_prompt: str = "") -> str:
+        pass
+```
+
+### Switching from Cloud LLM (Gemini) to Internal Local LLM (Ollama/vLLM)
+To run KnowSphere 100% on-premise without sending any query context to the cloud:
+1. Start your local Ollama server:
+   ```bash
+   ollama run llama3.2
+   ```
+2. In `backend/.env`, set:
+   ```env
+   LLM_PROVIDER="local"
+   ```
+The entire rest of the application (authentication, tenant isolation, PDF ingestion, chunking, local embeddings, and chat history) remains completely untouched!
+
+---
+
+## 📡 API Documentation
+
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/auth/register` | Register new user + initial workspace | No |
+| `POST` | `/api/auth/login` | Authenticate user & return JWT token | No |
+| `GET` | `/api/auth/me` | Fetch user profile & authorized workspaces | Yes |
+| `POST` | `/api/tenants` | Create an additional isolated workspace | Yes |
+| `GET` | `/api/tenants/current` | Get active workspace details & role | Yes |
+| `GET` | `/api/tenants/dashboard` | Get workspace analytics metrics | Yes |
+| `POST` | `/api/documents/upload` | Upload & ingest document into knowledge base | Yes |
+| `GET` | `/api/documents` | List documents belonging to active tenant | Yes |
+| `GET` | `/api/documents/{id}` | Get document metadata (strictly tenant scoped) | Yes |
+| `DELETE` | `/api/documents/{id}` | Delete document and vector chunks | Yes |
+| `POST` | `/api/chat` | Query RAG assistant & generate answer | Yes |
+| `GET` | `/api/conversations` | List user conversations in active tenant | Yes |
+| `GET` | `/api/conversations/{id}` | Get full conversation message history | Yes |
+| `DELETE` | `/api/conversations/{id}`| Delete conversation | Yes |
+| `GET` | `/api/members` | List members in active workspace | Yes |
+| `POST` | `/api/members` | Invite new member to workspace | Yes (Admin/Owner) |
+| `PATCH` | `/api/members/{id}` | Update member role | Yes (Admin/Owner) |
+| `DELETE` | `/api/members/{id}` | Remove member from workspace | Yes (Admin/Owner) |
+
+---
+
+## 🧪 Automated Verification & Testing
+
+KnowSphere includes an automated test suite verifying all acceptance criteria:
+
+```bash
+# Run backend test suite
+cd backend
+pytest -v
+```
+
+### Running the End-to-End Multi-Tenant Demonstration Script:
+```bash
+python scripts/demo_tenants.py
+```
+
+This automated verification script executes:
+1. **Tenant A ("ABC Technologies")** registration and upload of `ABC_Leave_Policy.txt`.
+2. **Tenant B ("XYZ Technologies")** registration and upload of `XYZ_Bonus_Plan.txt`.
+3. **Security Check 1:** Tenant A attempts to access Tenant B's document ID $\rightarrow$ **Strictly rejected with 404**.
+4. **RAG Search Check:** Tenant A asks for leave entitlement $\rightarrow$ **Retrieves ABC policy with source citation**.
+5. **Security Check 2:** Tenant A asks for executive bonus information $\rightarrow$ **Tenant B chunks are NOT retrieved; safe fallback triggered!**
+
+---
+
+## 🔒 Security & Privacy Guarantees
+
+- **No Shared Vector Space Across Tenants:** Chunks are filtered by `tenant_id` at the database index layer.
+- **Passwords Hashed with Salt:** Stored using standard `bcrypt` with individual work salts.
+- **No Document Exposure to External Embeddings:** Text is embedded within the server process; only synthesized context for an active prompt reaches the configured LLM.
+- **Role-Based Access Control:** Document uploads, deletions, and member invitations are restricted to verified roles.
+
+---
+
+## 🗺 Future Roadmap
+
+- [ ] Hybrid lexical + vector search (BM25 + pgvector Reciprocal Rank Fusion)
+- [ ] Document OCR support via Tesseract for scanned image PDFs
+- [ ] Role-based granular chunk ACLs within an organization
+- [ ] Streaming tokens via Server-Sent Events (SSE) in the chat interface
+
+---
+
+## 👨‍💻 Author & Academic Project Context
+- **Project Name:** KnowSphere
+- **Degree:** B.Tech in Computer Science & Engineering (Artificial Intelligence & Machine Learning)
+- **Domain:** Production Retrieval-Augmented Generation (RAG) & Multi-Tenant Distributed Systems
