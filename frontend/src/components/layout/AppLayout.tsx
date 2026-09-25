@@ -13,19 +13,60 @@ import {
   Sparkles,
   Building2,
   Menu,
-  X
+  X,
+  Key,
+  Loader2,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { tenantApi } from '../../services/api';
+import { tenantApi, authApi } from '../../services/api';
 
 export const AppLayout: React.FC = () => {
-  const { user, activeWorkspace, workspaces, switchWorkspace, logout, refreshUser } = useAuth();
+  const { user, activeWorkspace, workspaces, switchWorkspace, joinWorkspace, logout, refreshUser } = useAuth();
   const navigate = useNavigate();
   const [isOrgDropdownOpen, setIsOrgDropdownOpen] = useState(false);
   const [isCreateOrgModalOpen, setIsCreateOrgModalOpen] = useState(false);
+  const [isJoinOrgModalOpen, setIsJoinOrgModalOpen] = useState(false);
   const [newOrgName, setNewOrgName] = useState('');
+  const [joinCodeInput, setJoinCodeInput] = useState('');
+  const [detectedCompany, setDetectedCompany] = useState<{ name: string; slug: string } | null>(null);
+  const [isVerifyingCode, setIsVerifyingCode] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
   const [isCreatingOrg, setIsCreatingOrg] = useState(false);
+  const [isJoiningOrg, setIsJoiningOrg] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  React.useEffect(() => {
+    if (!isJoinOrgModalOpen) {
+      setDetectedCompany(null);
+      setJoinError(null);
+      return;
+    }
+
+    const trimmed = joinCodeInput.trim().toUpperCase();
+    if (!trimmed || trimmed.length < 5) {
+      setDetectedCompany(null);
+      setJoinError(null);
+      return;
+    }
+
+    const timeout = setTimeout(async () => {
+      setIsVerifyingCode(true);
+      setJoinError(null);
+      try {
+        const data = await authApi.lookupWorkspace(trimmed);
+        setDetectedCompany({ name: data.name, slug: data.slug });
+      } catch (err: any) {
+        setDetectedCompany(null);
+        setJoinError(err.response?.data?.detail || 'No organization found for this code.');
+      } finally {
+        setIsVerifyingCode(false);
+      }
+    }, 350);
+
+    return () => clearTimeout(timeout);
+  }, [joinCodeInput, isJoinOrgModalOpen]);
 
   const handleCreateOrg = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,6 +82,22 @@ export const AppLayout: React.FC = () => {
       alert(err.response?.data?.detail || 'Failed to create workspace');
     } finally {
       setIsCreatingOrg(false);
+    }
+  };
+
+  const handleJoinOrg = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!joinCodeInput.trim()) return;
+    setJoinError(null);
+    try {
+      setIsJoiningOrg(true);
+      await joinWorkspace(joinCodeInput.trim().toUpperCase());
+      setIsJoinOrgModalOpen(false);
+      setJoinCodeInput('');
+    } catch (err: any) {
+      setJoinError(err.response?.data?.detail || 'Failed to join workspace. Please check code.');
+    } finally {
+      setIsJoiningOrg(false);
     }
   };
 
@@ -135,16 +192,27 @@ export const AppLayout: React.FC = () => {
                   </span>
                 </button>
               ))}
-              <div className="border-t border-earth-100 mt-1 pt-1">
+              <div className="border-t border-earth-100 mt-1 pt-1 space-y-0.5">
                 <button
                   onClick={() => {
                     setIsOrgDropdownOpen(false);
                     setIsCreateOrgModalOpen(true);
                   }}
-                  className="w-full px-3 py-2 text-left text-xs font-medium text-sage-700 hover:bg-sage-50 flex items-center gap-1.5"
+                  className="w-full px-3 py-2 text-left text-xs font-medium text-sage-700 hover:bg-sage-50 flex items-center gap-1.5 rounded-lg"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   Create New Workspace
+                </button>
+                <button
+                  onClick={() => {
+                    setIsOrgDropdownOpen(false);
+                    setJoinError(null);
+                    setIsJoinOrgModalOpen(true);
+                  }}
+                  className="w-full px-3 py-2 text-left text-xs font-medium text-forest-800 hover:bg-earth-50 flex items-center gap-1.5 rounded-lg"
+                >
+                  <Key className="w-3.5 h-3.5 text-sage-600" />
+                  Join Workspace with Code
                 </button>
               </div>
             </div>
@@ -252,12 +320,12 @@ export const AppLayout: React.FC = () => {
       {/* Create Organization Modal */}
       {isCreateOrgModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-forest-900/40 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-earth-200 p-6">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-earth-200 p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-forest-900">Create New Workspace</h3>
               <button
                 onClick={() => setIsCreateOrgModalOpen(false)}
-                className="p-1 rounded-lg text-earth-400 hover:bg-earth-100"
+                className="p-1 rounded-lg text-earth-400 hover:bg-earth-100 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -281,16 +349,106 @@ export const AppLayout: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsCreateOrgModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-earth-700 hover:bg-earth-100"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-earth-700 hover:bg-earth-100 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isCreatingOrg}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-sage-600 hover:bg-sage-700 text-white transition-colors disabled:opacity-60"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-sage-600 hover:bg-sage-700 text-white transition-colors disabled:opacity-60 cursor-pointer"
                 >
                   {isCreatingOrg ? 'Creating...' : 'Create Workspace'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Join Workspace with Code Modal */}
+      {isJoinOrgModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-forest-900/40 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-earth-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-sage-100 text-sage-700 flex items-center justify-center">
+                  <Key className="w-4 h-4" />
+                </div>
+                <h3 className="text-lg font-bold text-forest-900">Join Workspace with Code</h3>
+              </div>
+              <button
+                onClick={() => setIsJoinOrgModalOpen(false)}
+                className="p-1 rounded-lg text-earth-400 hover:bg-earth-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {joinError && (
+              <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs">
+                {joinError}
+              </div>
+            )}
+
+            <form onSubmit={handleJoinOrg}>
+              <p className="text-xs text-earth-600 mb-4">
+                Enter the unique 6-character code provided by your organization's leader or administrator to join their workspace.
+              </p>
+              <label className="block text-xs font-semibold text-forest-800 mb-1">
+                Workspace Invite Code
+              </label>
+              <input
+                type="text"
+                required
+                value={joinCodeInput}
+                onChange={(e) => setJoinCodeInput(e.target.value.toUpperCase())}
+                placeholder="e.g. KS-8B4N9X"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-earth-300 text-sm uppercase tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-sage-500 focus:border-transparent mb-3"
+              />
+
+              {/* Live Company Name Preview */}
+              {isVerifyingCode && (
+                <div className="mb-4 p-3 rounded-2xl bg-earth-100/70 border border-earth-200 text-forest-800 text-xs flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 text-sage-600 animate-spin" />
+                  <span>Verifying organization code...</span>
+                </div>
+              )}
+
+              {detectedCompany && !isVerifyingCode && (
+                <div className="mb-4 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-950 flex items-center justify-between shadow-2xs">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold">
+                      <Building2 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">Company Found</span>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      </div>
+                      <p className="text-sm font-bold text-emerald-950 mt-0.5">{detectedCompany.name}</p>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-200/80 text-emerald-900 text-[10px] font-bold">
+                    Verified
+                  </span>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsJoinOrgModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-earth-700 hover:bg-earth-100 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isJoiningOrg}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-sage-600 hover:bg-sage-700 text-white transition-colors disabled:opacity-60 cursor-pointer"
+                >
+                  {isJoiningOrg ? 'Joining...' : 'Join Workspace'}
                 </button>
               </div>
             </form>

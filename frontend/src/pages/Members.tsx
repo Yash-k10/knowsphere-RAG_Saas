@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, Shield, Trash2, X, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Users, UserPlus, Shield, Trash2, X, AlertCircle, CheckCircle2, Key, Copy, Check } from 'lucide-react';
 import { membersApi } from '../services/api';
 import { TenantMember, TenantRole } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -14,8 +14,17 @@ export const Members: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const canManage = activeWorkspace?.role === 'OWNER' || activeWorkspace?.role === 'ADMIN';
+
+  const handleCopyCode = () => {
+    if (activeWorkspace?.join_code) {
+      navigator.clipboard.writeText(activeWorkspace.join_code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   const fetchMembers = async () => {
     try {
@@ -116,6 +125,37 @@ export const Members: React.FC = () => {
             <span>Add Member</span>
           </button>
         )}
+      </div>
+
+      {/* Workspace Join Code Share Card */}
+      <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-sage-50 via-white to-earth-50 border border-sage-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-2xl bg-sage-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+            <Key className="w-5 h-5 text-sage-100" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-sage-900">Workspace Join Code</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-sage-100 text-sage-800 font-semibold">1-Click Join</span>
+            </div>
+            <p className="text-xs text-earth-600 mt-0.5">
+              Share this code with employees so they can register or join this workspace directly.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <div className="px-4 py-2 rounded-xl bg-white border border-earth-300 font-mono text-sm font-bold text-forest-900 tracking-widest shadow-2xs">
+            {activeWorkspace?.join_code || 'Loading...'}
+          </div>
+          <button
+            type="button"
+            onClick={handleCopyCode}
+            className="px-3.5 py-2 rounded-xl bg-sage-600 hover:bg-sage-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+          >
+            {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+            <span>{copied ? 'Copied!' : 'Copy Code'}</span>
+          </button>
+        </div>
       </div>
 
       {success && (

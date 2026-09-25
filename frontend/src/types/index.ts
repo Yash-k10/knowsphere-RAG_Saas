@@ -11,6 +11,7 @@ export interface Workspace {
   id: string;
   name: string;
   slug: string;
+  join_code?: string;
   role: TenantRole;
 }
 

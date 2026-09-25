@@ -1,9 +1,18 @@
-import React from 'react';
-import { Building2, Shield, Cpu, Lock, Layers, CheckCircle2, User, Key } from 'lucide-react';
+import React, { useState } from 'react';
+import { Building2, Shield, Cpu, Lock, Layers, CheckCircle2, User, Key, Copy, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export const Settings: React.FC = () => {
   const { activeWorkspace, user } = useAuth();
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyCode = () => {
+    if (activeWorkspace?.join_code) {
+      navigator.clipboard.writeText(activeWorkspace.join_code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -41,6 +50,25 @@ export const Settings: React.FC = () => {
             <p className="text-sm font-semibold text-sage-700 mt-1">{activeWorkspace?.role}</p>
           </div>
 
+          <div className="p-4 rounded-2xl bg-sage-50/70 border border-sage-200">
+            <div className="flex items-center justify-between">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-sage-900">
+                Workspace Join Code
+              </label>
+              <button
+                type="button"
+                onClick={handleCopyCode}
+                className="text-[11px] text-sage-700 hover:text-sage-900 font-semibold flex items-center gap-1 cursor-pointer"
+              >
+                {copied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                <span>{copied ? 'Copied' : 'Copy'}</span>
+              </button>
+            </div>
+            <p className="text-sm font-mono font-bold text-forest-900 mt-1 tracking-wider">
+              {activeWorkspace?.join_code || 'Loading...'}
+            </p>
+          </div>
+
           <div className="p-4 rounded-2xl bg-earth-50/70 border border-earth-200">
             <label className="block text-[11px] font-bold uppercase tracking-wider text-earth-500">
               Workspace Slug
@@ -48,7 +76,7 @@ export const Settings: React.FC = () => {
             <p className="text-sm font-mono text-forest-800 mt-1">{activeWorkspace?.slug}</p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-earth-50/70 border border-earth-200">
+          <div className="p-4 rounded-2xl bg-earth-50/70 border border-earth-200 sm:col-span-2">
             <label className="block text-[11px] font-bold uppercase tracking-wider text-earth-500">
               Tenant UUID
             </label>

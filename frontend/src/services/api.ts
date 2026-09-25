@@ -50,7 +50,7 @@ apiClient.interceptors.response.use(
 
 // Auth Service
 export const authApi = {
-  async register(data: { name: string; email: string; password: string; organization_name?: string }) {
+  async register(data: { name: string; email: string; password: string; organization_name?: string; join_code?: string }) {
     const res = await apiClient.post<{ access_token: string; token_type: string }>('/auth/register', data);
     return res.data;
   },
@@ -64,12 +64,20 @@ export const authApi = {
     const res = await apiClient.get<{ user: User; workspaces: Workspace[] }>('/auth/me');
     return res.data;
   },
+  async lookupWorkspace(code: string) {
+    const res = await apiClient.get<{ valid: boolean; name: string; slug: string; join_code: string }>(`/auth/lookup-workspace/${code}`);
+    return res.data;
+  },
 };
 
 // Tenant Service
 export const tenantApi = {
   async createTenant(name: string) {
     const res = await apiClient.post<Workspace>('/tenants', { name });
+    return res.data;
+  },
+  async joinTenant(join_code: string) {
+    const res = await apiClient.post<Workspace>('/tenants/join', { join_code });
     return res.data;
   },
   async getCurrentTenant() {

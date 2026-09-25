@@ -9,7 +9,8 @@ interface AuthContextType {
   activeWorkspace: Workspace | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string, orgName?: string) => Promise<void>;
+  register: (name: string, email: string, password: string, orgName?: string, joinCode?: string) => Promise<void>;
+  joinWorkspace: (joinCode: string) => Promise<void>;
   logout: () => void;
   switchWorkspace: (workspaceId: string) => void;
   refreshUser: () => Promise<void>;
@@ -64,15 +65,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setToken(data.access_token);
   };
 
-  const register = async (name: string, email: string, password: string, orgName?: string) => {
+  const register = async (name: string, email: string, password: string, orgName?: string, joinCode?: string) => {
     const data = await authApi.register({
       name,
       email,
       password,
       organization_name: orgName,
+      join_code: joinCode,
     });
     localStorage.setItem('knowsphere_token', data.access_token);
     setToken(data.access_token);
+  };
+
+  const joinWorkspace = async (joinCode: string) => {
+    const target = await tenantApi.joinTenant(joinCode);
+    await fetchUserData();
+    switchWorkspace(target.id);
   };
 
   const logout = () => {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   MessageSquare,
   Plus,
@@ -12,13 +13,16 @@ import {
   Loader2,
   Bot,
   User as UserIcon,
-  HelpCircle
+  HelpCircle,
+  ExternalLink
 } from 'lucide-react';
 import { chatApi } from '../services/api';
 import { Conversation, Message, SourceCitation } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { FormattedMessage } from '../components/FormattedMessage';
 
 export const Chat: React.FC = () => {
+  const navigate = useNavigate();
   const { activeWorkspace } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
@@ -264,15 +268,24 @@ export const Chat: React.FC = () => {
                           : 'bg-earth-50 text-forest-900 border border-earth-200'
                       }`}
                     >
-                      <div className="whitespace-pre-wrap">{msg.content}</div>
+                      <FormattedMessage content={msg.content} isUser={isUser} />
                     </div>
 
                     {/* Sources Attribution Rail */}
                     {!isUser && msg.sources_meta && msg.sources_meta.length > 0 && (
                       <div className="space-y-2 pt-1">
-                        <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-sage-700">
-                          <FileText className="w-3.5 h-3.5" />
-                          <span>Sources Referenced ({msg.sources_meta.length})</span>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-sage-700">
+                            <FileText className="w-3.5 h-3.5" />
+                            <span>Knowledge Base Sources ({msg.sources_meta.length})</span>
+                          </div>
+                          <button
+                            onClick={() => navigate('/knowledge-base')}
+                            className="text-[11px] font-medium text-sage-600 hover:text-sage-800 flex items-center gap-1 transition-colors"
+                          >
+                            <span>Open Knowledge Base</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </button>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           {msg.sources_meta.map((source: SourceCitation, sIdx: number) => {
@@ -281,13 +294,18 @@ export const Chat: React.FC = () => {
                             return (
                               <div
                                 key={sIdx}
-                                className="p-3 rounded-xl border border-earth-200 bg-white shadow-2xs hover:border-sage-300 transition-colors"
+                                className="p-3 rounded-xl border border-earth-200 bg-white shadow-2xs hover:border-sage-400 transition-colors"
                               >
                                 <div className="flex items-start justify-between gap-2">
-                                  <div className="min-w-0">
-                                    <p className="font-semibold text-xs text-forest-900 truncate">
-                                      📄 {source.document_name}
-                                    </p>
+                                  <div className="min-w-0 flex-1">
+                                    <button
+                                      onClick={() => navigate('/knowledge-base')}
+                                      className="font-semibold text-xs text-forest-900 hover:text-sage-700 text-left truncate flex items-center gap-1 group w-full"
+                                      title="Open in Knowledge Base"
+                                    >
+                                      <span className="truncate">📄 {source.document_name}</span>
+                                      <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 text-sage-600 shrink-0 transition-opacity" />
+                                    </button>
                                     <div className="flex items-center gap-2 mt-0.5">
                                       {source.page && (
                                         <span className="text-[10px] text-earth-500 font-medium">
@@ -320,6 +338,14 @@ export const Chat: React.FC = () => {
                             );
                           })}
                         </div>
+                      </div>
+                    )}
+
+                    {/* General AI Knowledge Attribution */}
+                    {!isUser && (!msg.sources_meta || msg.sources_meta.length === 0) && (
+                      <div className="flex items-center gap-1.5 text-[11px] font-medium text-earth-500 pt-0.5">
+                        <Sparkles className="w-3.5 h-3.5 text-sage-600 shrink-0" />
+                        <span>Answered using General AI Knowledge (Not found in organization documents)</span>
                       </div>
                     )}
                   </div>
