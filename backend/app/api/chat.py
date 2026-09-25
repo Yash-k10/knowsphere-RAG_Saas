@@ -33,12 +33,17 @@ async def chat(
     5. Saves and returns grounded answer and source citations.
     """
     conversation: Conversation | None = None
+    recent_history: list[dict] = []
 
     if req.conversation_id:
-        stmt = select(Conversation).where(
-            Conversation.id == req.conversation_id,
-            Conversation.tenant_id == ctx.tenant_id,
-            Conversation.user_id == ctx.user.id
+        stmt = (
+            select(Conversation)
+            .options(selectinload(Conversation.messages))
+            .where(
+                Conversation.id == req.conversation_id,
+                Conversation.tenant_id == ctx.tenant_id,
+                Conversation.user_id == ctx.user.id
+            )
         )
         res = await db.execute(stmt)
         conversation = res.scalar_one_or_none()
@@ -47,6 +52,11 @@ async def chat(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Conversation not found in this organization"
             )
+        # Extract previous messages for conversation context (sorted by created_at)
+        if conversation.messages:
+            sorted_msgs = sorted(conversation.messages, key=lambda m: m.created_at)
+            for m in sorted_msgs[-6:]:
+                recent_history.append({"role": m.role.value, "content": m.content})
     else:
         # Generate dynamic title from first few words of the question
         title = req.message.strip().split("\n")[0][:45]
@@ -72,11 +82,12 @@ async def chat(
     db.add(user_msg)
     await db.flush()
 
-    # Execute RAG pipeline
+    # Execute RAG pipeline with history context
     rag_result = await RAGService.answer_query(
         db=db,
         tenant_id=ctx.tenant_id,
-        query=req.message
+        query=req.message,
+        history=recent_history
     )
 
     # Save assistant message with citations
@@ -107,6 +118,7 @@ async def list_conversations(
     """Lists conversations for the authenticated user within their active workspace."""
     stmt = (
         select(Conversation)
+        .options(selectinload(Conversation.messages))
         .where(
             Conversation.tenant_id == ctx.tenant_id,
             Conversation.user_id == ctx.user.id

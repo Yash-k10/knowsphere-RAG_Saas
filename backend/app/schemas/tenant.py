@@ -13,8 +13,12 @@ class TenantResponse(BaseModel):
     id: uuid.UUID
     name: str
     slug: str
+    join_code: str | None = None
     created_at: datetime
     role: TenantRole | None = None
+
+class JoinWorkspaceRequest(BaseModel):
+    join_code: str = Field(..., min_length=4, max_length=32, description="Unique workspace invite/join code")
 
 class MemberInviteRequest(BaseModel):
     email: str

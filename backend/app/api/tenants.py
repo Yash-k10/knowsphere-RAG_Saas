@@ -9,7 +9,7 @@ from app.models.tenant import Tenant, TenantMember, TenantRole
 from app.models.document import Document, DocumentStatus
 from app.models.chunk import DocumentChunk
 from app.models.chat import Conversation
-from app.schemas.tenant import TenantCreate, TenantResponse, DashboardStats
+from app.schemas.tenant import TenantCreate, TenantResponse, DashboardStats, JoinWorkspaceRequest
 
 router = APIRouter(prefix="/tenants", tags=["Tenants"])
 
@@ -50,8 +50,62 @@ async def create_tenant(
         id=tenant.id,
         name=tenant.name,
         slug=tenant.slug,
+        join_code=tenant.join_code,
         created_at=tenant.created_at,
         role=TenantRole.OWNER
+    )
+
+@router.post("/join", response_model=TenantResponse)
+async def join_tenant_by_code(
+    req: JoinWorkspaceRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Allows an authenticated user to join an existing organization workspace using its unique join code."""
+    clean_code = req.join_code.strip().upper()
+    stmt = select(Tenant).where(Tenant.join_code == clean_code)
+    res = await db.execute(stmt)
+    tenant = res.scalar_one_or_none()
+
+    if not tenant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No workspace found with invite code '{clean_code}'."
+        )
+
+    # Check if already a member
+    existing = await db.execute(
+        select(TenantMember).where(
+            TenantMember.tenant_id == tenant.id,
+            TenantMember.user_id == current_user.id
+        )
+    )
+    mem = existing.scalar_one_or_none()
+    if mem:
+        return TenantResponse(
+            id=tenant.id,
+            name=tenant.name,
+            slug=tenant.slug,
+            join_code=tenant.join_code,
+            created_at=tenant.created_at,
+            role=mem.role
+        )
+
+    new_member = TenantMember(
+        tenant_id=tenant.id,
+        user_id=current_user.id,
+        role=TenantRole.MEMBER
+    )
+    db.add(new_member)
+    await db.commit()
+
+    return TenantResponse(
+        id=tenant.id,
+        name=tenant.name,
+        slug=tenant.slug,
+        join_code=tenant.join_code,
+        created_at=tenant.created_at,
+        role=TenantRole.MEMBER
     )
 
 @router.get("/current", response_model=TenantResponse)
@@ -63,6 +117,7 @@ async def get_current_tenant(
         id=ctx.tenant.id,
         name=ctx.tenant.name,
         slug=ctx.tenant.slug,
+        join_code=ctx.tenant.join_code,
         created_at=ctx.tenant.created_at,
         role=ctx.role
     )

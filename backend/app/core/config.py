@@ -41,13 +41,13 @@ class Settings(BaseSettings):
     EMBEDDING_DIM: int = 384
     CHUNK_SIZE: int = 500
     CHUNK_OVERLAP: int = 100
-    SIMILARITY_THRESHOLD: float = 0.60
-    TOP_K_CHUNKS: int = 4
+    SIMILARITY_THRESHOLD: float = 0.40
+    TOP_K_CHUNKS: int = 6
 
     # LLM Settings (Google Gemini as requested)
     LLM_PROVIDER: str = "cloud"  # 'cloud' or 'local'
     GEMINI_API_KEY: str = Field(default="")
-    GEMINI_MODEL: str = "gemini-1.5-flash"
+    GEMINI_MODEL: str = "gemini-3.5-flash-lite"
 
     # CORS
     BACKEND_CORS_ORIGINS: list[str] = [

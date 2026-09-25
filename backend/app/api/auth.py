@@ -39,31 +39,78 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     db.add(new_user)
     await db.flush()
 
-    # Create Default Workspace / Tenant
-    org_name = req.organization_name or f"{req.name.split()[0]}'s Workspace"
-    base_slug = slugify(org_name)
-    slug = f"{base_slug}-{str(new_user.id)[:6]}"
+    # Handle joining an existing workspace vs creating a new one
+    if req.join_code and req.join_code.strip():
+        clean_code = req.join_code.strip().upper()
+        tenant_stmt = select(Tenant).where(Tenant.join_code == clean_code)
+        res_tenant = await db.execute(tenant_stmt)
+        tenant = res_tenant.scalar_one_or_none()
 
-    tenant = Tenant(
-        name=org_name,
-        slug=slug
-    )
-    db.add(tenant)
-    await db.flush()
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No workspace found with invite code '{clean_code}'. Please check with your team administrator."
+            )
 
-    # Assign user as OWNER of this workspace
-    member = TenantMember(
-        tenant_id=tenant.id,
-        user_id=new_user.id,
-        role=TenantRole.OWNER
-    )
-    db.add(member)
-    await db.commit()
-    await db.refresh(new_user)
+        # Assign user as MEMBER of existing workspace
+        member = TenantMember(
+            tenant_id=tenant.id,
+            user_id=new_user.id,
+            role=TenantRole.MEMBER
+        )
+        db.add(member)
+        await db.commit()
+        await db.refresh(new_user)
+    else:
+        # Create Default Workspace / Tenant
+        org_name = req.organization_name or f"{req.name.split()[0]}'s Workspace"
+        base_slug = slugify(org_name)
+        slug = f"{base_slug}-{str(new_user.id)[:6]}"
+
+        tenant = Tenant(
+            name=org_name,
+            slug=slug
+        )
+        db.add(tenant)
+        await db.flush()
+
+        # Assign user as OWNER of this workspace
+        member = TenantMember(
+            tenant_id=tenant.id,
+            user_id=new_user.id,
+            role=TenantRole.OWNER
+        )
+        db.add(member)
+        await db.commit()
+        await db.refresh(new_user)
 
     # Generate JWT
     token = create_access_token(subject=str(new_user.id))
     return Token(access_token=token, token_type="bearer")
+
+@router.get("/lookup-workspace/{join_code}")
+async def lookup_workspace_by_code(
+    join_code: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Public lookup endpoint allowing employees to preview the organization name before joining."""
+    clean_code = join_code.strip().upper()
+    stmt = select(Tenant).where(Tenant.join_code == clean_code)
+    res = await db.execute(stmt)
+    tenant = res.scalar_one_or_none()
+
+    if not tenant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No workspace found for invite code '{clean_code}'."
+        )
+
+    return {
+        "valid": True,
+        "name": tenant.name,
+        "slug": tenant.slug,
+        "join_code": tenant.join_code
+    }
 
 @router.post("/login", response_model=Token)
 async def login(
@@ -109,6 +156,7 @@ async def get_me(
             "id": str(tenant.id),
             "name": tenant.name,
             "slug": tenant.slug,
+            "join_code": tenant.join_code,
             "role": member.role.value
         })
 
