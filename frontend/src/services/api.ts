@@ -24,6 +24,7 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 90000, // 90s — allows time for backend model fallbacks + retries
 });
 
 // Request Interceptor: inject JWT token and active Tenant ID

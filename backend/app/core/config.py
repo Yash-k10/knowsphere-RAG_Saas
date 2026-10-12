@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     # LLM Settings (Google Gemini as requested)
     LLM_PROVIDER: str = "cloud"  # 'cloud' or 'local'
     GEMINI_API_KEY: str = Field(default="")
-    GEMINI_MODEL: str = "gemini-3.5-flash-lite"
+    GEMINI_MODEL: str = "gemini-2.0-flash"
 
     # CORS
     BACKEND_CORS_ORIGINS: list[str] = [
