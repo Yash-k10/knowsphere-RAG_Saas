@@ -6,12 +6,11 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Valid Gemini model names — verified against the Google Generative AI API.
+# Valid Gemini model names — as of Oct 2026, Google has migrated to 3.x naming.
 # Order: primary configured model first, then fast/cheap fallbacks.
 _FALLBACK_MODELS = [
-    "gemini-2.0-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-1.5-flash",
+    "gemini-3.8-flash",
+    "gemini-3.5-flash-lite",
 ]
 
 class CloudLLMProvider(LLMProvider):
