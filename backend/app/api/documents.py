@@ -1,18 +1,96 @@
 import uuid
 import os
+import mimetypes
 from pathlib import Path
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, status, Header
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from app.db.database import get_db
 from app.core.config import settings
 from app.core.dependencies import get_current_tenant_context, TenantContext
+from app.core.security import decode_access_token
+from app.models.user import User
+from app.models.tenant import Tenant, TenantMember
 from app.models.document import Document, DocumentStatus
+from app.models.chunk import DocumentChunk
 from app.schemas.document import DocumentResponse
 from app.services.ingestion_service import IngestionService
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
+
+async def get_tenant_context_for_file_view(
+    token: str | None = None,
+    tenant_id: str | None = None,
+    authorization: str | None = Header(default=None),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    db: AsyncSession = Depends(get_db)
+) -> TenantContext:
+    """
+    Resolves authenticated tenant context from either Bearer header or query parameters.
+    Allows viewing/streaming documents directly in browser tabs or iframes while maintaining strict multi-tenant isolation.
+    """
+    raw_token = token
+    if not raw_token and authorization:
+        if authorization.lower().startswith("bearer "):
+            raw_token = authorization[7:].strip()
+        else:
+            raw_token = authorization.strip()
+
+    if not raw_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication token required to view document"
+        )
+
+    payload = decode_access_token(raw_token)
+    if not payload or not payload.get("sub"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token"
+        )
+
+    try:
+        user_id = uuid.UUID(payload.get("sub"))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token subject")
+
+    user_stmt = select(User).where(User.id == user_id, User.is_active == True)
+    user = (await db.execute(user_stmt)).scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    target_tenant_str = tenant_id or x_tenant_id
+    target_tenant_id = None
+    if target_tenant_str:
+        try:
+            target_tenant_id = uuid.UUID(target_tenant_str)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid tenant ID format")
+
+    if target_tenant_id:
+        stmt_mem = select(TenantMember).where(
+            TenantMember.user_id == user.id,
+            TenantMember.tenant_id == target_tenant_id
+        )
+        member = (await db.execute(stmt_mem)).scalar_one_or_none()
+        if not member:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied for this organization")
+    else:
+        stmt_mem = select(TenantMember).where(
+            TenantMember.user_id == user.id
+        ).order_by(TenantMember.created_at.asc())
+        member = (await db.execute(stmt_mem)).scalars().first()
+        if not member:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User has no workspace memberships")
+
+    tenant_stmt = select(Tenant).where(Tenant.id == member.tenant_id)
+    tenant = (await db.execute(tenant_stmt)).scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
+
+    return TenantContext(tenant=tenant, member=member, user=user)
 
 @router.post("/upload", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 async def upload_document(
@@ -160,3 +238,70 @@ async def delete_document(
     await db.delete(doc)
     await db.commit()
     return None
+
+@router.get("/{document_id}/file")
+async def view_document_file(
+    document_id: uuid.UUID,
+    download: bool = False,
+    ctx: TenantContext = Depends(get_tenant_context_for_file_view),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Serves the original document file (PDF, TXT, DOCX, etc.) inline for viewing or downloading.
+    Enforces tenant isolation: users can only view documents belonging to their active workspace.
+    """
+    stmt = select(Document).where(
+        Document.id == document_id,
+        Document.tenant_id == ctx.tenant_id
+    )
+    doc = (await db.execute(stmt)).scalar_one_or_none()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found or access denied"
+        )
+
+    # If physical file exists, return FileResponse
+    if doc.file_path and os.path.exists(doc.file_path):
+        mime_type, _ = mimetypes.guess_type(doc.filename)
+        if not mime_type:
+            ext = Path(doc.filename).suffix.lower()
+            if ext == ".pdf":
+                mime_type = "application/pdf"
+            elif ext in (".txt", ".md"):
+                mime_type = "text/plain; charset=utf-8"
+            elif ext == ".docx":
+                mime_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            else:
+                mime_type = "application/octet-stream"
+
+        disposition = "attachment" if download else "inline"
+        return FileResponse(
+            path=doc.file_path,
+            filename=doc.filename,
+            media_type=mime_type,
+            content_disposition_type=disposition
+        )
+
+    # Fallback: if physical file was cleared but chunks exist in database, reconstruct text
+    chunks_stmt = select(DocumentChunk).where(
+        DocumentChunk.document_id == doc.id,
+        DocumentChunk.tenant_id == ctx.tenant_id
+    ).order_by(DocumentChunk.chunk_index.asc())
+    chunks = (await db.execute(chunks_stmt)).scalars().all()
+    if chunks:
+        reconstructed_text = "\n\n".join(c.content for c in chunks)
+        disposition = "attachment" if download else "inline"
+        return Response(
+            content=reconstructed_text,
+            media_type="text/plain; charset=utf-8",
+            headers={
+                "Content-Disposition": f'{disposition}; filename="{doc.filename}"'
+            }
+        )
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Original file content is not available"
+    )
+

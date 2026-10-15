@@ -135,6 +135,18 @@ export const documentsApi = {
   async delete(id: string) {
     await apiClient.delete(`/documents/${id}`);
   },
+  async getFileBlob(id: string) {
+    const res = await apiClient.get<Blob>(`/documents/${id}/file`, {
+      responseType: 'blob',
+    });
+    return res.data;
+  },
+  getFileUrl(id: string, download = false) {
+    const token = localStorage.getItem('knowsphere_token') || '';
+    const activeTenantId = localStorage.getItem('knowsphere_tenant_id') || '';
+    const downloadParam = download ? '&download=true' : '';
+    return `${API_BASE}/documents/${id}/file?token=${encodeURIComponent(token)}&tenant_id=${encodeURIComponent(activeTenantId)}${downloadParam}`;
+  },
 };
 
 // Chat Service
