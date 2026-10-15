@@ -112,6 +112,27 @@ async def lookup_workspace_by_code(
         "join_code": tenant.join_code
     }
 
+@router.get("/demo-accounts")
+async def get_demo_accounts():
+    """Returns public demo accounts metadata for reviewers and interviewers."""
+    from app.services.demo_seed import DEMO_ACCOUNTS
+    return [
+        {
+            "company_name": acc["company_name"],
+            "slug": acc["slug"],
+            "join_code": acc["join_code"],
+            "user_name": acc["user_name"],
+            "role_title": acc["role_title"],
+            "email": acc["email"],
+            "password": acc["password"],
+            "industry": acc["industry"],
+            "accent_color": acc["accent_color"],
+            "sample_question": acc["sample_question"],
+            "doc_filename": acc["doc_filename"]
+        }
+        for acc in DEMO_ACCOUNTS
+    ]
+
 @router.post("/login", response_model=Token)
 async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
@@ -121,6 +142,13 @@ async def login(
     email = form_data.username.lower().strip()
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
+
+    # If demo account is attempted and not found, auto-seed on demand
+    if not user and email in ("demo.acme@knowsphere.io", "demo.apex@knowsphere.io"):
+        from app.services.demo_seed import seed_demo_accounts
+        await seed_demo_accounts(db)
+        result = await db.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
 
     if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(

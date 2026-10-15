@@ -22,6 +22,12 @@ async def lifespan(app: FastAPI):
         check_and_init_vector_extension()
         Base.metadata.create_all(bind=sync_engine)
         logger.info("Database initialized successfully.")
+        
+        # Seed enterprise demo accounts for interviewers/reviewers
+        from app.services.demo_seed import seed_demo_accounts
+        from app.db.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as db:
+            await seed_demo_accounts(db)
     except Exception as e:
         logger.error(f"Error during database startup initialization: {e}")
     yield

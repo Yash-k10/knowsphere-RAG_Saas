@@ -76,6 +76,22 @@ export const authApi = {
     const res = await apiClient.get<{ valid: boolean; name: string; slug: string; join_code: string }>(`/auth/lookup-workspace/${code}`);
     return res.data;
   },
+  async getDemoAccounts() {
+    const res = await apiClient.get<Array<{
+      company_name: string;
+      slug: string;
+      join_code: string;
+      user_name: string;
+      role_title: string;
+      email: string;
+      password: string;
+      industry: string;
+      accent_color: string;
+      sample_question: string;
+      doc_filename: string;
+    }>>('/auth/demo-accounts');
+    return res.data;
+  },
 };
 
 // Tenant Service
